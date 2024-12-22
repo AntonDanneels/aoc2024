@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{HashSet};
+use std::collections::{HashSet, HashMap};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 struct Vec2 {
@@ -49,7 +49,8 @@ fn walk(start: &Vec2, end: &Vec2, map: &Vec<Vec<bool>>,
 
     let mut current_pos = start.clone();
     let mut visited = HashSet::new();
-    let mut score = 0;
+    let mut score = 1;
+    visited.insert(start.clone());
     loop {
         if current_pos == *end {
             break;
@@ -94,11 +95,72 @@ fn walk(start: &Vec2, end: &Vec2, map: &Vec<Vec<bool>>,
     result
 }
 
+fn get_neighbour(map: &Vec<Vec<bool>>, width: usize, height: usize,
+                 point: &Vec2,
+                 delta_x: i32, delta_y: i32) -> Option<Vec2> {
+    let px = point.x as i32;
+    let py = point.y as i32;
+    let nx = px as i32 + delta_x;
+    let ny = py as i32 + delta_y;
+
+    if nx < 0 || ny < 0 {
+        return None;
+    }
+    let nx = nx as usize;
+    let ny = ny as usize;
+
+    if nx >= width || ny >= height {
+        return None;
+    }
+
+    Some(Vec2::new(nx, ny))
+}
+
+fn dist(a: &Vec2, b: &Vec2) -> usize {
+    let ax = a.x as i32;
+    let ay = a.y as i32;
+    let bx = b.x as i32;
+    let by = b.y as i32;
+
+    ((bx - ax).abs() + (by - ay).abs()) as usize
+}
+
+fn get_reachable_neighbours(map: &Vec<Vec<bool>>, width: usize, height: usize,
+                            pos: &Vec2, radius: usize) -> Vec<Vec2> {
+    let mut result = Vec::new();
+
+    let radius = radius as i32;
+    for y in 0..=(radius * 2) {
+        for x in 0..=(radius * 2) {
+            let yy = y - radius;
+            let xx = x - radius;
+            let nx = pos.x as i32 + xx;
+            let ny = pos.y as i32 + yy;
+            if nx < 0 || ny < 0 || nx as usize >= width || ny as usize >= height {
+                continue;
+            }
+
+            let nx = nx as usize;
+            let ny = ny as usize;
+            if map[ny][nx] || (nx == pos.x && ny == pos.y) {
+                continue;
+            }
+            let n = Vec2::new(nx, ny);
+            if dist(&n, pos) <= radius as usize {
+                result.push(n);
+            }
+        }
+    }
+
+    result
+}
+
 fn main() {
     let mut start_point = Vec2::empty();
     let mut end_point = Vec2::empty();
     let mut obstacles = Vec::new();
-    let mut map = include_str!("sample.txt")
+    let mut path = Vec::new();
+    let mut map = include_str!("input.txt")
         .lines()
         .enumerate()
         .map(|(y, line)| {
@@ -106,13 +168,18 @@ fn main() {
                 .enumerate()
                 .map(|(x, c)| {
                     match c {
-                        '.' => false,
+                        '.' => {
+                            path.push(Vec2::new(x, y));
+                            false
+                        },
                         'S' => {
                             start_point = Vec2::new(x, y);
+                            path.push(Vec2::new(x, y));
                             false
                         },
                         'E' => {
                             end_point = Vec2::new(x, y);
+                            path.push(Vec2::new(x, y));
                             false
                         },
                         '#' => {
@@ -145,50 +212,30 @@ fn main() {
         println!();
     }
 
-    for obstacle in obstacles.iter() {
-        if obstacle.x == 0 || obstacle.x == width - 2 {
-            continue;
-        }
-        if obstacle.y == 0 || obstacle.y == height - 2 {
-            continue;
-        }
-        let px = obstacle.x as i32;
-        let py = obstacle.y as i32;
-        let n1x = px as i32 - 1;
-        let n1y = py as i32 - 1;
-        let n2x = px as i32 + 1;
-        let n2y = py as i32 + 1;
+    println!("{:?}({}) -> {:?}({})",
+             start_point, score[start_point.y][start_point.x],
+             end_point, score[end_point.y][end_point.x],);
 
-        let neighbours = [
-            ((n1x, py), (n2x, py)),
-            ((px, n1y), (px, n2y)),
-        ];
+    let mut scores = HashMap::new();
+    let mut sum = 0;
 
-        for ((n1x, n1y), (n2x, n2y)) in neighbours.iter() {
-            if *n1x < 0 || *n1y < 0 || *n2x < 0 || *n2y < 0 {
-                continue;
-            }
-            let n1x = *n1x as usize;
-            let n1y = *n1y as usize;
-            let n2x = *n2x as usize;
-            let n2y = *n2y as usize;
-            if n1x >= width || n1y >= height || n2x >= width || n2y >= height {
-                continue;
-            }
-            if map[n1y][n1x] || map[n2y][n2x] {
+    for node in path.iter() {
+        let neighbours = get_reachable_neighbours(&map, width, height, &node, 20);
+        for neighbour in neighbours.iter() {
+            if score[neighbour.y][neighbour.x] >= score[node.y][node.x] {
                 continue;
             }
 
-            let new_score = 
-            if score[n1y][n1x] > score[n2y][n2x] {
-                score[n2y][n2x] + 1
-            } else {
-                score[n1y][n1x] + 1
-            };
-
-            let delta = score[start_point.y][start_point.x] - new_score;
-
-            println!("{}", delta);
+            let score_start = score[start_point.y][start_point.x];
+            let new_score = (score_start - score[node.y][node.x]) + score[neighbour.y][neighbour.x] + dist(node, neighbour);
+            let delta = score_start - new_score;
+            if delta >= 100 {
+                *scores.entry(delta).or_insert(0) += 1;
+                sum += 1;
+            }
         }
     }
+
+    println!("{:?} {}", scores, sum);
+    //println!("{}", sum);
 }
