@@ -21,8 +21,11 @@ fn last_digit(number: u64) -> u64 {
 }
 
 fn encode(window: &[(u64, i32)]) -> u64 {
-    let window = window.iter().map(|(_, x)| (x + 9) as u64).collect::<Vec<u64>>();
-    window[0] | window[1] << 8 | window[2] << 16 | window[3]  << 24
+    let window = window
+        .iter()
+        .map(|(_, x)| (x + 9) as u64)
+        .collect::<Vec<u64>>();
+    window[0] | window[1] << 8 | window[2] << 16 | window[3] << 24
 }
 
 fn decode(val: u64) -> Vec<i32> {
@@ -31,25 +34,19 @@ fn decode(val: u64) -> Vec<i32> {
         ((val >> 8) & 0xff) as i32 - 9,
         ((val >> 16) & 0xff) as i32 - 9,
         ((val >> 24) & 0xff) as i32 - 9,
-    ].to_vec()
+    ]
+    .to_vec()
 }
 
 fn main() {
-
-    let secrets = [
-        1,
-        10,
-        100,
-        2024,
-    ];
+    let secrets = [1, 10, 100, 2024];
 
     let input = include_str!("input.txt")
-                .lines()
-                .map(|line| {
-                    u64::from_str(line).unwrap()
-                })
-                .collect::<Vec<u64>>();
+        .lines()
+        .map(|line| u64::from_str(line).unwrap())
+        .collect::<Vec<u64>>();
 
+    /*
     let input = [123_u64];
 
     let input = [
@@ -58,6 +55,7 @@ fn main() {
         3,
         2024
     ];
+    */
 
     let mut sum = 0;
     let mut all_deltas = Vec::new();
@@ -73,12 +71,20 @@ fn main() {
             digit = new_digit;
         }
         //println!("{}", secret);
-        //println!("{:?}", deltas);
+        //println!("{:?}", deltas.len());
 
-        let mut deltas = deltas.windows(4)
-            .map(|window| {
+        let mut deltas = deltas
+            .windows(4)
+            .enumerate()
+            .map(|(i, window)| {
+                /*
+                println!("{} {:?} {} {}",
+                             i,
+                             window, encode(window), window[3].0);
+                             */
                 (encode(window), window[3].0)
-            }).collect::<Vec<(u64, u64)>>();
+            })
+            .collect::<Vec<(u64, u64)>>();
 
         deltas.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -87,20 +93,21 @@ fn main() {
     }
 
     println!("{}", sum);
-    println!("{:?}", all_deltas);
+    println!("{:?}", all_deltas.len());
 
     let mut best_sequence = HashMap::new();
 
     for deltas in all_deltas.iter() {
+        let mut highest = HashMap::new();
         for (d, v) in deltas.iter() {
-            *best_sequence.entry(d).or_insert(0) += v;
+            highest.entry(d).or_insert(v);
+        }
+
+        for (d, v) in highest.iter() {
+            *best_sequence.entry(*d).or_insert(0) += *v;
         }
     }
 
-    let best = best_sequence.iter().max_by(|a, b|
-                 a.1.cmp(b.1)
-             ).unwrap();
-    println!("{:?}, {:?}",
-             best,
-             decode(**best.0));
+    let best = best_sequence.iter().max_by(|a, b| a.1.cmp(b.1)).unwrap();
+    println!("{:?}, {:?}", best, decode(**best.0));
 }
